@@ -1,0 +1,17 @@
+{
+  "name": "clean-text",
+  "owner": {
+    "name": "arturtsg-del"
+  },
+  "metadata": {
+    "description": "Writing skills that keep text from reading like AI output (Russian and English)"
+  },
+  "plugins": [
+    {
+      "name": "clean-text",
+      "source": "./plugins/clean-text",
+      "description": "no-ai-slop catalogue + Russian patterns + jargon check + a sentence-by-sentence audit loop that repeats until clean",
+      "version": "1.0.0"
+    }
+  ]
+}
