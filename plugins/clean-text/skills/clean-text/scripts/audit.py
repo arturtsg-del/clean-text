@@ -2,6 +2,7 @@
 """Sentence lister and slop gate for the clean-text skill (Russian and English).
 
     python3 audit.py FILE [--lang ru|en] [--only-gate] [--skip-list] [--ignore-quoted]
+    python3 audit.py DRAFT --compare EDITED
 
 FILE can be Markdown, plain text, HTML or PDF (PDF needs `pdftotext` from poppler).
 
@@ -10,6 +11,12 @@ Output has three parts:
   gate   regex hits for known slop patterns in both languages, with context;
   watch  figurative words worth a second look, with context and repeat counts.
 
+--compare runs the facts check instead: it lists numbers, dates, quoted names and codes that the
+edit lost or added, and changes in the number of negations, hedges ("about", «предварительно»),
+conditions ("if", «если») and currency marks. It then prints every changed sentence as a
+was / now pair, to check that each claim kept its meaning and strength. Exit status 0 means no
+numbers, dates, names or counts changed; the pairs still need reading.
+
 --ignore-quoted blanks out text in quotes before the gate runs. Use it for style guides and
 reviews that quote the patterns they discuss.
 
@@ -17,6 +24,7 @@ Exit status is 0 when the gate finds nothing. Reading the list is still required
 judge metaphors, overclaims or jargon.
 """
 import argparse
+import difflib
 import html
 import re
 import shutil
@@ -126,14 +134,93 @@ def context(text, m, width=60):
     return text[max(0, m.start() - width):m.end() + width].strip()
 
 
+# --- facts check: compare the author's draft with the edited text -------------------------
+
+MONTHS = r"январ\w*|феврал\w*|март\w*|апрел\w*|ма[йяе]\b|июн\w*|июл\w*|август\w*|сентябр\w*|октябр\w*|ноябр\w*|декабр\w*|квартал\w*|january|february|march|april|may|june|july|august|september|october|november|december|quarter|q[1-4]\b"
+NEGATION = r"(?<![а-яё])(?:не|нет|ни|без)(?![а-яё])|\b(?:not|no|never|none|without)\b|n't\b"
+HEDGE = r"предварител\w*|около|примерно|порядка|ориентировочн\w*|приблизительн\w*|ожида\w*|прогноз\w*|вероятно|возможно|может|план\w*|оценк\w*|\b(?:approximately|about|around|roughly|preliminary|estimated?|expected|forecast\w*|likely|may|might|could|planned)\b"
+CONDITION = r"(?<![а-яё])(?:если|при условии|в случае|пока|только если)(?![а-яё])|\b(?:if|unless|provided|only when|until)\b"
+CURRENCY = r"[€$£₽]|евро|доллар\w*|руб\w*|\b(?:eur|usd|gbp|euros?|dollars?)\b"
+
+
+def fact_profile(text):
+    """Things a style edit must not lose or add: numbers, dates, names, negations, hedges, conditions."""
+    text = text.replace("\xa0", " ")
+    sets = Counter()
+    for m in re.finditer(r"\d+(?:[.,]\d+)*\s?%?", text):
+        sets["number " + m.group(0).replace(" ", "").replace(",", ".")] += 1
+    for m in re.finditer(MONTHS, text, re.I):
+        sets["date word " + m.group(0).lower()] += 1
+    for m in re.finditer(r"«[^»]{1,60}»|\"[^\"]{1,60}\"|“[^”]{1,60}”", text):
+        sets["quoted name " + m.group(0)] += 1
+    for m in re.finditer(r"\b[A-ZА-ЯЁ][A-ZА-ЯЁ0-9]+(?:-[A-ZА-ЯЁ0-9]+)*\b", text):
+        sets["code " + m.group(0)] += 1
+    counts = {
+        "negations": len(re.findall(NEGATION, text, re.I)),
+        "hedges": len(re.findall(HEDGE, text, re.I)),
+        "conditions": len(re.findall(CONDITION, text, re.I)),
+        "currency marks": len(re.findall(CURRENCY, text, re.I)),
+    }
+    return sets, counts
+
+
+def sentence_list(path):
+    kind, raw = load(path)
+    units = {"html": units_from_html, "pdf": units_from_pdf}.get(kind, units_from_text)(raw)
+    return [s for _, chunk in units for s in split_sentences(chunk)]
+
+
+def changed_sentences(before_path, after_path):
+    """Pairs of sentences the edit changed, so each can be checked for the same claim and strength."""
+    old, new = sentence_list(before_path), sentence_list(after_path)
+    pairs = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        if tag != "equal":
+            pairs.append((" ".join(old[i1:i2]) or "(nothing)", " ".join(new[j1:j2]) or "(removed)"))
+    return pairs
+
+
+def compare(before_path, after_path):
+    before = load(before_path)[1]
+    after = load(after_path)[1]
+    b_sets, b_counts = fact_profile(before)
+    a_sets, a_counts = fact_profile(after)
+    lost = [(k, b_sets[k] - a_sets[k]) for k in sorted(b_sets) if b_sets[k] > a_sets[k]]
+    added = [(k, a_sets[k] - b_sets[k]) for k in sorted(a_sets) if a_sets[k] > b_sets[k]]
+    print("--- FACTS CHECK ---")
+    print("Lost from the draft:" if lost else "Lost from the draft: none")
+    for k, n in lost:
+        print(f"    {k}  (x{n})")
+    print("New in the edit:" if added else "New in the edit: none")
+    for k, n in added:
+        print(f"    {k}  (x{n})")
+    changed = []
+    for k in b_counts:
+        if b_counts[k] != a_counts[k]:
+            changed.append(k)
+        print(f"{k:<15} {b_counts[k]} -> {a_counts[k]}{'   <- check' if b_counts[k] != a_counts[k] else ''}")
+    pairs = changed_sentences(before_path, after_path)
+    print(f"\n--- CHANGED SENTENCES ({len(pairs)}) ---")
+    print("For each pair confirm: same claim, same strength (key/main/all/any/can/is stay as they were).")
+    for n, (was, now) in enumerate(pairs, 1):
+        print(f"{n:>3}. was: {was}")
+        print(f"     now: {now}")
+    ok = not lost and not added and not changed
+    print("\nFACTS MATCH" if ok else "\nFACTS DIFFER: restore each item or explain it in the report")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file")
+    ap.add_argument("--compare", metavar="EDITED", help="facts check: FILE is the author's draft, EDITED is your version")
     ap.add_argument("--lang", choices=["ru", "en"])
     ap.add_argument("--only-gate", action="store_true")
     ap.add_argument("--skip-list", action="store_true")
     ap.add_argument("--ignore-quoted", action="store_true")
     args = ap.parse_args()
+    if args.compare:
+        return compare(args.file, args.compare)
 
     kind, raw = load(args.file)
     units = {"html": units_from_html, "pdf": units_from_pdf}.get(kind, units_from_text)(raw)

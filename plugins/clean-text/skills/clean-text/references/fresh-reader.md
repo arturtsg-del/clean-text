@@ -6,7 +6,7 @@ finished text does not have that problem. This file is the brief for that instan
 
 ## When it runs
 
-After Passes A–E find nothing. The fresh reader checks a text you already believe is clean. Its
+After Passes A–F find nothing. The fresh reader checks a text you already believe is clean. Its
 findings go back into the loop, and once you have fixed them, a new fresh reader checks the new
 version: a reader who saw an earlier draft is no longer fresh.
 
@@ -61,10 +61,13 @@ The text:
 
 Treat each finding as a reader's reaction, not an order.
 
-- **Fix it** when the reader is right: replace the term, give the fact, scope the claim, name the
-  thing being referred to.
+- **Fix it** when the reader is right and the fix needs nothing new: reorder, split a sentence, use
+  a fact that is already in the text, name a thing the text already names elsewhere.
+- **Ask the author** when the fix needs information the text does not have: what a term means, the
+  basis of a number, the real scope of a claim. Add it under "Open" and leave the passage as it is.
+  Never fill the gap with your own guess.
 - **Keep it** only with a reason you can state in one line, for example "this reader works with
   this abbreviation daily". Put the reason under "Left as is, on purpose" in the report.
 
-After fixing, run Passes A–E on the new version, then start a new fresh reader. Stop after three
+After fixing, run Passes A–F on the new version, then start a new fresh reader. Stop after three
 fresh readers if they keep finding things, and list what is left.
