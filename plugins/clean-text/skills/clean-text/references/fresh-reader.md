@@ -53,8 +53,9 @@ Then the text, after a blank line.
 Sort each finding into one of two groups. Do not ask the reader to sort; you know what the author gave.
 
 - **Fixable now:** the fix needs nothing new. Reorder, split a sentence, use a fact already in the
-  text, name a thing the text names elsewhere, replace a figure of speech whose meaning the text
-  makes clear. Apply these, then rerun the gate and the facts check on the changed text.
+  text, replace a figure of speech whose meaning the text makes clear, or name what "this" or "it"
+  refers to when the text leaves exactly one candidate. If two readings are possible, ask the
+  author. Apply these, then rerun the gate and the facts check on the changed text.
 - **Needs the author:** the fix needs information the text does not have (what a term means, the basis
   of a number, the real scope of a claim). Add it under "Open" unless an existing question already
   covers it. Leave the passage as it is.

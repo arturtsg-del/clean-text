@@ -5,12 +5,22 @@ description: >
   READMEs, reports) so it stops reading like AI output, in Russian and English, without touching the
   author's facts. TRIGGER when the user asks to write, rewrite, shorten, clean up or check a text:
   "make it human", "убери слоп", "сделай по-человечески", "вычисти текст", "прогони лупом", "is this
-  AI slop?", "проверь текст". Not for routine chat answers. Picks a light or deep check by the stakes
+  AI slop?", «это слоп?», "проверь текст". Not for routine chat answers. Picks a light or deep check by the stakes
   of the text, uses the team glossary and the user's personal voice profile when they exist, and
   quietly learns the user's voice over time.
 ---
 
 # Clean text
+
+## Always, at every level, even for one short message
+
+1. Save the author's text as a file before you change anything.
+2. After editing, run `python3 ${CLAUDE_SKILL_DIR}/scripts/audit.py <draft> --compare <edited>`.
+3. Fix every flag it prints by editing the text. An explanation never clears a flag.
+4. Never drop or weaken words of importance, possibility, promise or call: «ключевой», «позволяет»,
+   «может», «будет», «давайте»; "key", "allows", "can", "will", "let's". Never add a fact.
+
+Skipping step 2 is the most common way this skill fails. It takes one command.
 
 Five parts work together:
 
@@ -74,14 +84,22 @@ You edit style. Facts, claims and their strength belong to the author.
 - **Never delete a claim.** A sentence that says something about the subject (a result, forecast,
   conclusion, opinion, decision) may be rephrased, not removed, even when vague or unsupported:
   rephrase it plainly and ask under "Open". Delete only sentences that say nothing about the subject
-  (throat-clearing, comments about the text) or repeat a claim that stays elsewhere. This beats
-  anything in the catalogue that says to cut a claim.
+  (throat-clearing, comments about the text) or repeat a claim that stays elsewhere. A puffed-up
+  claim ("a game changer", «прорыв») is a claim too: turn it into the plain claim it makes ("makes a
+  big difference to onboarding") and ask for the evidence. This beats anything in the catalogue that
+  says to cut a claim.
+- **Keep caveats next to what they limit.** Reordering is fine, but a conclusion does not move away
+  from the risks, conditions or «предварительно» that qualify it.
 - **Keep the strength.** Degree and certainty stay exactly as strong: "a key role" is not "mainly";
   "can work with any" is not "all are connected"; "some" is not "most"; "may" is not "will"; a plan
   stays a plan. Same for «ключевой», «основной», «прежде всего», «все», «любые», «может», «умеет». If
-  no plain wording keeps the strength, keep the author's words and ask. Empty praise that measures
-  nothing («инновационный», «уникальный», «мощный», "seamless") is the catalogue's to cut; say so
-  under "What changed".
+  no plain wording keeps the strength, keep the author's words and ask.
+- **Importance and possibility are claims, not decoration.** «Ключевой», «важный», «главный»,
+  "key", "critical" say how much something matters: they stay. «Позволяет», «может», «можно»,
+  "allows", "can" say that something is possible, not that it happens: «позволяет сократить сроки» may
+  become «с ним можно сократить сроки», never «сроки сократятся». «Давайте», "let's" is a joint call
+  and stays a call. Only empty praise that names no degree can go: «инновационный», «уникальный»,
+  «мощный», «революционный», "seamless", "cutting-edge", "world-class".
 - **Do not touch:** direct quotes, citations, legal and contract wording, code, product and company
   names, URLs, numbers and their units. Approved figures keep their wording and basis (net/gross,
   period, currency).
@@ -94,8 +112,9 @@ You edit style. Facts, claims and their strength belong to the author.
 
 A reader who has to ask "what does that mean?" has been let down by the sentence. Abbreviations,
 codes, names of in-house tools, made-up role titles and private nicknames get a plain explanation
-where they first appear, unless the glossary or profile says this reader knows them. If you do not
-know what a term means, keep it and ask; never guess it into the text. "KPI-4 dropped from 91% to 84%"
+where they first appear, unless the glossary or profile says this reader knows them. You may
+expand a standard abbreviation (P&L, NPS) or name a well-known public product only when you are
+certain. In-house names, codes and nicknames are never guessed: keep them and ask. "KPI-4 dropped from 91% to 84%"
 stays until the author says what KPI-4 measures.
 
 ---
@@ -111,10 +130,18 @@ ones that are slop, leave the ones that are not, without writing justifications.
 pattern matched; metaphors, overclaims and jargon need your reading of the numbered list.
 
 **C. Facts check.** `python3 ${CLAUDE_SKILL_DIR}/scripts/audit.py <draft> --compare <edited>` lists
-numbers (with тыс/млн/%), dates, quotes, codes and links the edit lost or added, changes in negations,
-hedges, conditions and currency marks, a warning if the text got over a third shorter, and every
-changed sentence as a was / now pair. Restore anything lost, remove anything added, and check each
-pair: same claim, same strength. This pair reading is also your re-read of your own edit.
+numbers (digits, number words, тыс/млн/%), dates, relative times, quotes, codes and links the edit
+lost or added, a warning if the text got over a third shorter, and every changed sentence as a
+was / now pair. Inside each pair it flags negations and six groups of degree and mode words:
+importance («ключевой», "key"), main cause («главный», "mainly"), possibility («позволяет», «можно»,
+"can"), future or promise («будет», "will"), call to act («давайте», "let's"), scope («все», «только»,
+"any"), hedges («вероятно», "may"). Swapping words inside a group passes ("allows" → "can").
+
+Resolve every flag by editing, not by explaining: a removed word or negation comes back; an added
+one goes, unless it only restates the same sentence of the draft («будут выше» for «ожидали, что
+выше»), which you note in one line under "Checks". Rerun until no flag is left. A sentence marked
+`[moved]` changed place: check it still sits next to the caveats that limit it. Reading the pairs
+is also your re-read of your own edit.
 
 **D. Rendered output** (decks, PDFs, HTML only): read what the reader will see, per
 `references/decks.md`.
@@ -135,7 +162,7 @@ limit: two rounds of fixes in Standard, three in Deep.
 | Repeated figurative verb | the same verb in every paragraph | Keep at most one |
 | Narrated honesty | "Let's be upfront:"; «скажем прямо» | Delete the sentence about the prose |
 | Defensive register | "We would never cut corners on quality." | State what is done using facts in the text; if none, keep it and ask |
-| Rotation without meaning | «это не инструмент, а партнёр» | Say the one thing, unless the contrast is the fact ("rent, not buy") |
+| Rotation without meaning | «это не инструмент, а партнёр» | Say the one thing. Keep the contrast when its second half guards against a likely misreading: «пауза, а не отмена», "rent, not buy" |
 | Universal a reader discounts | "handles any task"; «любые задачи» | Narrow only with limits the text gives; otherwise keep and ask |
 | Cryptic punchline | "Speed is a habit." | Cut only if it carries no claim; end on the last concrete sentence |
 | Colon joining unlike things | "Our approach is simple: customers, people, growth." | A colon introduces a list, label or definition; otherwise two sentences |

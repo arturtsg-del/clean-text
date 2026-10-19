@@ -20,4 +20,6 @@ python3 "$audit" "$here/tests/quote_draft.md" --compare "$here/tests/quote_edite
   && { echo "FAIL: facts check missed an edited quote and a dropped link"; fail=1; } || echo "ok   facts check flags edited quotes and dropped links"
 python3 "$audit" "$here/tests/code_block.md" --only-gate >/dev/null \
   && echo "ok   code blocks and inline code are not gated" || { echo "FAIL: code was gated as prose"; fail=1; }
+python3 "$audit" "$here/tests/words_draft.md" --compare "$here/tests/words_edited.md" >/dev/null \
+  && { echo "FAIL: facts check missed number words or relative dates"; fail=1; } || echo "ok   facts check flags number words and relative dates"
 exit $fail

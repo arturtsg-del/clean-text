@@ -11,11 +11,13 @@ Output has three parts:
   gate   regex hits for known slop patterns in both languages, with context;
   watch  figurative words worth a second look, with context and repeat counts.
 
---compare runs the facts check instead: it lists numbers (with тыс/млн/k/M and %), dates, quotes,
-codes and links that the edit lost or added, and changes in the number of negations, hedges ("about", «предварительно»),
+--compare runs the facts check instead: it lists numbers (digits with тыс/млн/k/M and %, and number
+words), dates and relative times («вчера», "next week"), quotes, codes and links that the edit lost
+or added, and changes in the number of negations, hedges ("about", «предварительно»),
 conditions ("if", «если») and currency marks. It then prints every changed sentence as a
-was / now pair, to check that each claim kept its meaning and strength. Exit status 0 means no
-numbers, dates, names or counts changed; the pairs still need reading.
+was / now pair, and marks pairs where words of degree or mode («ключевой», «все», «может»,
+«позволяет», «давайте», "key", "can", "will") were removed or added. Exit status 0 means none of
+that changed; the pairs still need reading.
 
 --ignore-quoted blanks out text in quotes before the gate runs. Use it for style guides and
 reviews that quote the patterns they discuss.
@@ -157,6 +159,8 @@ CONDITION = r"(?<![а-яё])(?:если|при условии|в случае|п
 CURRENCY = r"[€$£₽]|евро|доллар\w*|руб\w*|\b(?:eur|usd|gbp|euros?|dollars?)\b"
 
 
+NUMBER_WORDS = r"(?<![а-яё])(?:один|одна|одно|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|двадцать|тридцать|сорок|пятьдесят|сто|двести|триста|тысяч\w*|миллион\w*|миллиард\w*|полтор\w*|половин\w*|треть\w*|четверть\w*|вдвое|втрое|дважды|трижды)(?![а-яё])|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|hundred|thousand|million|billion|half|third|quarter|dozen|double|twice|triple)\b"
+RELATIVE_TIME = r"(?<![а-яё])(?:вчера|сегодня|завтра|послезавтра|позавчера|понедельник\w*|вторник\w*|сред[аыу]|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*|(?:на|в) (?:этой|прошлой|следующей) неделе|в (?:этом|прошлом|следующем) (?:месяце|году|квартале)|до конца (?:недели|месяца|года|квартала))(?![а-яё])|\b(?:yesterday|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|(?:this|last|next) (?:week|month|year|quarter)|by the end of (?:the )?(?:week|month|year|quarter))\b"
 MAGNITUDE = r"(?:%|п\.\s?п\.|тыс\.?|млн|млрд|трлн|k|m|bn|mln|thousand|million|billion|pp)"
 
 
@@ -169,6 +173,10 @@ def fact_profile(text):
         sets["number " + m.group(0).replace(" ", "").replace(",", ".").lower()] += 1
     for m in re.finditer(MONTHS, text, re.I):
         sets["date word " + m.group(0).lower()] += 1
+    for m in re.finditer(NUMBER_WORDS, text, re.I):
+        sets["number word " + m.group(0).lower()] += 1
+    for m in re.finditer(RELATIVE_TIME, text, re.I):
+        sets["time word " + m.group(0).lower()] += 1
     for m in re.finditer(r"«[^»]{1,400}»|\"[^\"\n]{1,400}\"|“[^”]{1,400}”", text):
         sets["quote " + m.group(0)] += 1
     for m in re.finditer(r"\b[A-ZА-ЯЁ][A-ZА-ЯЁ0-9]+(?:-[A-ZА-ЯЁ0-9]+)*\b", text):
@@ -185,6 +193,34 @@ def fact_profile(text):
     return sets, counts, words
 
 
+# Words of degree and mode, grouped by what they claim. A style edit may swap words inside a group
+# ("allows" -> "can", «главный» -> «ключевой») but must not change how many of each group a sentence has.
+STRENGTH_GROUPS = {
+    "importance": r"ключев\w*|важн\w*|решающ\w*|критичн\w*|\b(?:key|major|critical|crucial|central|pivotal|essential|vital)\b",
+    "main cause or share": r"основн\w*|главн\w*|прежде всего|в основном|\b(?:main|primary|mainly|largely|chiefly|mostly)\b",
+    "possibility": r"(?<![а-яё])(?:может|могут|можно|позволя\w*|способ\w*|умеет|умеют)(?![а-яё])|\b(?:can|could|allows?|enables?|able to)\b",
+    "future or promise": r"(?<![а-яё])(?:будет|будут|будем|гарантир\w*|обязательно)(?![а-яё])|\b(?:will|guarantee\w*|shall)\b",
+    "call to act": r"(?<![а-яё])(?:давайте|просим|прошу|нужно|надо|должн\w*)(?![а-яё])|\b(?:let's|please|must|should|need to)\b",
+    "all or none": r"(?<![а-яё])(?:все|всех|всё|весь|вся|любой|любая|любые|любых|каждый|каждая|каждое|всегда|никогда|только|лишь)(?![а-яё])|\b(?:all|any|every|each|always|never|only|none)\b",
+    "some or likely": r"(?<![а-яё])(?:некотор\w*|многи\w*|большинств\w*|вероятно|возможно|наверняка|точно)(?![а-яё])|\b(?:some|many|most|likely|probably|may|might|definitely)\b",
+}
+GROUP_ADVICE = {
+    "importance": "importance words are claims, never empty praise: put it back",
+    "main cause or share": "«главный» and 'mainly' claim more than «ключевой» and 'key': keep the author's degree",
+    "possibility": "a possibility must stay a possibility, not become a fact: put it back",
+    "future or promise": "a promise or forecast must keep its strength",
+    "call to act": "a call or request must stay a call, not become a statement",
+    "all or none": "scope words set how much is claimed: put it back",
+    "some or likely": "hedges set how sure the claim is: put it back",
+}
+FILLER = r"важно (?:отметить|подчеркнуть|понимать)|стоит (?:отметить|подчеркнуть)|следует отметить|it'?s (?:important|worth) (?:to note|noting)|importantly|прежде всего хочу"
+
+
+def strength_profile(sentence):
+    sentence = re.sub(FILLER, " ", sentence, flags=re.I)
+    return {g: len(re.findall(rx, sentence, re.I)) for g, rx in STRENGTH_GROUPS.items()}
+
+
 def sentence_list(path):
     kind, raw = load(path)
     units = {"html": units_from_html, "pdf": units_from_pdf}.get(kind, units_from_text)(raw)
@@ -192,12 +228,29 @@ def sentence_list(path):
 
 
 def changed_sentences(before_path, after_path):
-    """Pairs of sentences the edit changed, so each can be checked for the same claim and strength."""
+    """Pairs of sentences the edit changed, so each can be checked for the same claim and strength.
+    A sentence that moved elsewhere is paired with its new version instead of showing as removed + added."""
     old, new = sentence_list(before_path), sentence_list(after_path)
-    pairs = []
+    pairs, gone, came = [], [], []
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
-        if tag != "equal":
-            pairs.append((" ".join(old[i1:i2]) or "(nothing)", " ".join(new[j1:j2]) or "(removed)"))
+        if tag == "equal":
+            continue
+        if tag == "replace" and i2 - i1 == j2 - j1:
+            pairs.extend(zip(old[i1:i2], new[j1:j2]))
+        elif tag == "replace":
+            pairs.append((" ".join(old[i1:i2]), " ".join(new[j1:j2])))
+        elif tag == "delete":
+            gone.extend(old[i1:i2])
+        else:
+            came.extend(new[j1:j2])
+    for g in gone:  # moved sentences: find the closest inserted one
+        best = max(came, key=lambda c: difflib.SequenceMatcher(None, g, c).ratio(), default=None)
+        if best is not None and difflib.SequenceMatcher(None, g, best).ratio() > 0.6:
+            came.remove(best)
+            pairs.append((g, best + "  [moved]"))
+        else:
+            pairs.append((g, "(removed)"))
+    pairs.extend(("(nothing)", c) for c in came)
     return pairs
 
 
@@ -225,10 +278,25 @@ def compare(before_path, after_path):
     pairs = changed_sentences(before_path, after_path)
     print(f"\n--- CHANGED SENTENCES ({len(pairs)}) ---")
     print("For each pair confirm: same claim, same strength (key/main/all/any/can/is stay as they were).")
+    flagged = 0
     for n, (was, now) in enumerate(pairs, 1):
         print(f"{n:>3}. was: {was}")
         print(f"     now: {now}")
-    ok = not lost and not added and not changed
+        w, v = strength_profile(was), strength_profile(now)
+        neg_was = len(re.findall(NEGATION, re.sub(FILLER, " ", was, flags=re.I), re.I))
+        neg_now = len(re.findall(NEGATION, re.sub(FILLER, " ", now, flags=re.I), re.I))
+        if neg_was != neg_now:
+            flagged += 1
+            print(f"     <- negations {neg_was} -> {neg_now}: a lost «не» / \"not\" can flip or drop a claim. "
+                  f"Restore it unless the clause it sat in said nothing")
+        for g in STRENGTH_GROUPS:
+            if w[g] != v[g]:
+                flagged += 1
+                verb = "removed" if v[g] < w[g] else "added"
+                print(f"     <- {g} word {verb} ({w[g]} -> {v[g]}): {GROUP_ADVICE[g]}")
+    if flagged:
+        print(f"\n{flagged} flag(s) inside pairs. Each one is resolved by restoring the word, not by explaining it.")
+    ok = not lost and not added and not changed and not flagged
     print("\nFACTS MATCH" if ok else "\nFACTS DIFFER: restore each item or explain it in the report")
     return 0 if ok else 1
 
