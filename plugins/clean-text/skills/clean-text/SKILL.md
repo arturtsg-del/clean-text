@@ -49,7 +49,8 @@ one line.
 | **Deep** | The user asks for a loop ("прогони лупом", "до чистого"), or the text goes to a board, a client, investors or the public | Standard, then a second fresh reader on the fixed version |
 
 **Detect mode** ("это слоп?", "проверь, не переписывай"): run the script on the text and read it;
-report each finding as pattern, quote, short fix. No rewrite.
+report each finding as pattern, quote, short fix. No rewrite. Suggested fixes obey §3 too: never
+suggest swapping «ключевой» for «главный» or "can" for a plain statement.
 
 ---
 
