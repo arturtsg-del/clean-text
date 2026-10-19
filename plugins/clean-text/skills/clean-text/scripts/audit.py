@@ -11,8 +11,8 @@ Output has three parts:
   gate   regex hits for known slop patterns in both languages, with context;
   watch  figurative words worth a second look, with context and repeat counts.
 
---compare runs the facts check instead: it lists numbers, dates, quoted names and codes that the
-edit lost or added, and changes in the number of negations, hedges ("about", «предварительно»),
+--compare runs the facts check instead: it lists numbers (with тыс/млн/k/M and %), dates, quotes,
+codes and links that the edit lost or added, and changes in the number of negations, hedges ("about", «предварительно»),
 conditions ("if", «если») and currency marks. It then prints every changed sentence as a
 was / now pair, to check that each claim kept its meaning and strength. Exit status 0 means no
 numbers, dates, names or counts changed; the pairs still need reading.
@@ -78,12 +78,26 @@ def load(path):
 
 
 def units_from_text(text):
-    """Markdown or plain text: one unit per non-empty line, markup removed."""
-    units = []
-    for no, line in enumerate(text.splitlines(), 1):
-        line = re.sub(r"^\s*(?:#+|[-*+]|\d+[.)])\s+", "", line)
-        line = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", line)
-        line = line.replace("`", "").replace("**", "").replace("__", "")
+    """Markdown or plain text: one unit per non-empty line. Code, front matter and URLs are skipped."""
+    units, in_code = [], False
+    lines = text.splitlines()
+    start = 0
+    if lines and lines[0].strip() == "---":  # YAML front matter
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                start = i + 1
+                break
+    for no, line in enumerate(lines[start:], start + 1):
+        if re.match(r"^\s*(```|~~~)", line):
+            in_code = not in_code
+            continue
+        if in_code or re.match(r"^( {4}|\t)\S", line):
+            continue
+        line = re.sub(r"^\s*(?:#+|[-*+>]|\d+[.)])\s+", "", line)
+        line = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", line)
+        line = re.sub(r"`[^`]*`", " ", line)
+        line = re.sub(r"https?://\S+|www\.\S+", " ", line)
+        line = line.replace("**", "").replace("__", "")
         line = line.strip()
         if line and not re.fullmatch(r"[\s|:\-]+", line):
             units.append((f"line {no}", line))
@@ -138,30 +152,37 @@ def context(text, m, width=60):
 
 MONTHS = r"январ\w*|феврал\w*|март\w*|апрел\w*|ма[йяе]\b|июн\w*|июл\w*|август\w*|сентябр\w*|октябр\w*|ноябр\w*|декабр\w*|квартал\w*|january|february|march|april|may|june|july|august|september|october|november|december|quarter|q[1-4]\b"
 NEGATION = r"(?<![а-яё])(?:не|нет|ни|без)(?![а-яё])|\b(?:not|no|never|none|without)\b|n't\b"
-HEDGE = r"предварител\w*|около|примерно|порядка|ориентировочн\w*|приблизительн\w*|ожида\w*|прогноз\w*|вероятно|возможно|может|план\w*|оценк\w*|\b(?:approximately|about|around|roughly|preliminary|estimated?|expected|forecast\w*|likely|may|might|could|planned)\b"
+HEDGE = r"предварител\w*|около|примерно|порядка|ориентировочн\w*|приблизительн\w*|ожида\w*|прогноз\w*|вероятно|возможно|может|планир\w*|запланир\w*|\b(?:approximately|about|around|roughly|preliminary|estimated?|expected|forecast\w*|likely|may|might|could|planned)\b"
 CONDITION = r"(?<![а-яё])(?:если|при условии|в случае|пока|только если)(?![а-яё])|\b(?:if|unless|provided|only when|until)\b"
 CURRENCY = r"[€$£₽]|евро|доллар\w*|руб\w*|\b(?:eur|usd|gbp|euros?|dollars?)\b"
 
 
+MAGNITUDE = r"(?:%|п\.\s?п\.|тыс\.?|млн|млрд|трлн|k|m|bn|mln|thousand|million|billion|pp)"
+
+
 def fact_profile(text):
-    """Things a style edit must not lose or add: numbers, dates, names, negations, hedges, conditions."""
+    """Things a style edit must not lose or add: numbers with their magnitude, dates, quotes, names,
+    codes, links, and the count of negations, hedges, conditions and currency marks."""
     text = text.replace("\xa0", " ")
     sets = Counter()
-    for m in re.finditer(r"\d+(?:[.,]\d+)*\s?%?", text):
-        sets["number " + m.group(0).replace(" ", "").replace(",", ".")] += 1
+    for m in re.finditer(r"\d+(?:[.,]\d+)*(?:\s?" + MAGNITUDE + r"(?![a-zа-яё]))?", text, re.I):
+        sets["number " + m.group(0).replace(" ", "").replace(",", ".").lower()] += 1
     for m in re.finditer(MONTHS, text, re.I):
         sets["date word " + m.group(0).lower()] += 1
-    for m in re.finditer(r"«[^»]{1,60}»|\"[^\"]{1,60}\"|“[^”]{1,60}”", text):
-        sets["quoted name " + m.group(0)] += 1
+    for m in re.finditer(r"«[^»]{1,400}»|\"[^\"\n]{1,400}\"|“[^”]{1,400}”", text):
+        sets["quote " + m.group(0)] += 1
     for m in re.finditer(r"\b[A-ZА-ЯЁ][A-ZА-ЯЁ0-9]+(?:-[A-ZА-ЯЁ0-9]+)*\b", text):
         sets["code " + m.group(0)] += 1
+    for m in re.finditer(r"https?://[^\s)>\]]+|[\w.+-]+@[\w-]+\.[\w.]+", text):
+        sets["link " + m.group(0).rstrip(".,;")] += 1
     counts = {
         "negations": len(re.findall(NEGATION, text, re.I)),
         "hedges": len(re.findall(HEDGE, text, re.I)),
         "conditions": len(re.findall(CONDITION, text, re.I)),
         "currency marks": len(re.findall(CURRENCY, text, re.I)),
     }
-    return sets, counts
+    words = len(re.findall(r"\w+", text))
+    return sets, counts, words
 
 
 def sentence_list(path):
@@ -183,8 +204,8 @@ def changed_sentences(before_path, after_path):
 def compare(before_path, after_path):
     before = load(before_path)[1]
     after = load(after_path)[1]
-    b_sets, b_counts = fact_profile(before)
-    a_sets, a_counts = fact_profile(after)
+    b_sets, b_counts, b_words = fact_profile(before)
+    a_sets, a_counts, a_words = fact_profile(after)
     lost = [(k, b_sets[k] - a_sets[k]) for k in sorted(b_sets) if b_sets[k] > a_sets[k]]
     added = [(k, a_sets[k] - b_sets[k]) for k in sorted(a_sets) if a_sets[k] > b_sets[k]]
     print("--- FACTS CHECK ---")
@@ -199,6 +220,8 @@ def compare(before_path, after_path):
         if b_counts[k] != a_counts[k]:
             changed.append(k)
         print(f"{k:<15} {b_counts[k]} -> {a_counts[k]}{'   <- check' if b_counts[k] != a_counts[k] else ''}")
+    shrink = (b_words - a_words) / b_words if b_words else 0
+    print(f"{'words':<15} {b_words} -> {a_words}" + ("   <- over a third shorter: check nothing was dropped" if shrink > 0.33 else ""))
     pairs = changed_sentences(before_path, after_path)
     print(f"\n--- CHANGED SENTENCES ({len(pairs)}) ---")
     print("For each pair confirm: same claim, same strength (key/main/all/any/can/is stay as they were).")

@@ -1,236 +1,184 @@
 ---
 name: clean-text
 description: >
-  Writes, edits and audits any text a person will read (memos, Slack posts, emails, slide copy, briefs,
-  READMEs, chat answers longer than a paragraph) so it stops reading like AI output, in Russian and
-  English. Runs the no-ai-slop catalogue, Russian patterns, a jargon check, and a
-  sentence-by-sentence audit loop that repeats until a full pass finds nothing. TRIGGER on any request
-  to write, rewrite, shorten, clean up, "make it human", "убери слоп", "сделай по-человечески",
-  "прогони лупом", "вычисти текст", or "is this AI slop?". Detect mode names the patterns without
-  rewriting. Style edits keep the author's facts exactly as given.
+  Writes, edits and checks text a person will read (memos, Slack posts, emails, slide copy, briefs,
+  READMEs, reports) so it stops reading like AI output, in Russian and English, without touching the
+  author's facts. TRIGGER when the user asks to write, rewrite, shorten, clean up or check a text:
+  "make it human", "убери слоп", "сделай по-человечески", "вычисти текст", "прогони лупом", "is this
+  AI slop?", "проверь текст". Not for routine chat answers. Picks a light or deep check by the stakes
+  of the text, uses the team glossary and the user's personal voice profile when they exist, and
+  quietly learns the user's voice over time.
 ---
 
 # Clean text
 
-This skill has five parts:
+Five parts work together:
 
-1. **The catalogue.** `references/no-ai-slop.md` (vendored verbatim from petergyang/no-ai-slop, MIT):
-   banned words, empty phrases, binary contrasts, colon reveals, puffery, weasel attribution,
-   fake-profound kickers, recap endings, formatting slop, em dashes. Its self-check is
-   `references/no-ai-slop-eval.md`.
-2. **Russian.** `references/russian.md`: the same failure classes as they look in Russian, plus
-   канцелярит and the rules for тире. The upstream catalogue is English-only.
-3. **Jargon.** §2 below: every code, abbreviation or in-house name is explained where it first
-   appears.
-4. **The loop (this file).** A text is done only when a full, numbered,
-   sentence-by-sentence read of the final rendered output finds zero defects. The loop in §5 runs
-   until that is true.
-5. **The fresh reader.** `references/fresh-reader.md`: a second Claude instance that sees only the
-   finished text and marks every place a reader would stop. It catches what the author cannot see in
-   their own text.
+1. **Catalogue.** `references/no-ai-slop.md` (petergyang/no-ai-slop, MIT, verbatim): words, phrases
+   and patterns that make text read as machine-written. Read it once per session. Where its workflow
+   differs from this file, this file wins.
+2. **Russian.** `references/russian.md`: the same patterns in Russian, канцелярит, тире. Read it when
+   the text is in Russian.
+3. **Context.** `references/context.md`: the team glossary and the user's personal voice profile.
+4. **Facts rules and the loop** (this file).
+5. **Fresh reader.** `references/fresh-reader.md`: a second Claude that sees only the finished text.
 
-Read the references the first time this skill triggers in a session. Read `references/decks.md`
-when the output is a slide deck, a PDF or an HTML page.
+`${CLAUDE_SKILL_DIR}` below is the folder this file is in; if the variable is not set, use that path.
 
 ---
 
-## 0. Three jobs
+## 1. Pick the effort first
 
-**Edit (default).** The user gives a draft or asks you to write one. Write or edit, then run the loop
-in §5 on your own output. Return the final text and a short "What changed" list.
+Spend effort in proportion to the stakes. Choose once, at the start, and say which level you chose in
+one line.
 
-**Detect.** The user asks "is this slop?", "check this", "проверь текст", or wants findings without a
-rewrite. For each finding: the pattern name, the quoted line, the fix in a few words. No rewrite, no
-score, no guess about whether AI wrote it. Offer to edit after.
+| Level | When | What runs |
+|---|---|---|
+| **Quick** | Chat or Slack message, under ~150 words, internal | Context, one edit, gate on the result, facts check. No fresh reader |
+| **Standard** | Default for documents: memos, emails, briefs, README, posts | Everything in §5 once, one fresh reader, one round of fixes |
+| **Deep** | The user asks for a loop ("прогони лупом", "до чистого"), or the text goes to a board, a client, investors or the public | Standard, then a second fresh reader on the fixed version |
 
-**Loop.** The user says "прогони лупом", "до чистого", "until clean", or the text is long or
-high-stakes (goes to a client, a board, all staff). Same as Edit, but you report every pass:
-pass number, defects found, defects fixed.
-
----
-
-## 1. Facts come first
-
-You are editing style, so the facts stay as the author gave them. New figures, sources, examples or
-claims come only from the author. When a passage is weak because information is missing, list the
-question under "Open" and leave the passage as it is until the author answers.
-
-- **Never delete a claim.** A sentence that says something about the subject (a result, a forecast,
-  a conclusion, an opinion, a decision) may be rephrased but not removed, even when it is vague,
-  puffed up or unsupported. Rephrase it plainly and add a question under "Open". You may delete a
-  sentence only when it says nothing about the subject (throat-clearing, comments about the text) or
-  repeats a claim that stays elsewhere in the text. This rule wins over anything in the catalogue
-  that says to cut a claim, including weasel attribution, fake-profound kickers and recap endings.
-- **Never add a clarification to the text.** If you think you know the basis of a comparison, the
-  period, the scope or the meaning of a term, but the author did not say it, it goes under "Open" as
-  a question. It does not go into the text, not even with a note in the report.
-
-- **Every claim keeps its strength.** A plan stays a plan and a guess stays a guess. Do not upgrade
-  "planned" to "done" for rhythm.
-- **Words of degree and mode stay exactly as strong.** When you rephrase a claim, keep how much and
-  how sure it is: "a key role" is not "mainly" or "thanks to"; "can work with any" is not "all are
-  connected"; "some" is not "most"; "may" is not "will". In Russian the same holds for «ключевой»,
-  «основной», «прежде всего», «все», «любые», «некоторые», «может», «умеет», «подключено». If no plain
-  wording keeps the same strength, keep the author's words and add a question under "Open".
-- **Every term exists somewhere real.** A product name, feature or team name must exist in the
-  source material, the codebase or the company's own docs. If a search finds it nowhere, the term is
-  invented. Use the real name.
-- **Use official names.** If a product, team or process has an official name, use it in headings,
-  tags and body. Do not coin catchy replacement labels for things that already have names.
-- **One term, one meaning, the whole piece.** Do not call one thing "platform" on slide 2 and "the
-  system" on slide 5.
-- **Approved figures keep their approved wording and scope.** If a number came with a basis (net or
-  gross, a fiscal year, a currency), the basis travels with it.
+**Detect mode** ("это слоп?", "проверь, не переписывай"): run the script on the text and read it;
+report each finding as pattern, quote, short fix. No rewrite.
 
 ---
 
-## 2. Jargon
+## 2. Load context (cheap, once per session)
+
+Read these if they exist; skip silently if they do not. Never search for them beyond these paths.
+
+1. **Team glossary:** `.claude/clean-text.md` in the current project, else `~/.claude/clean-text/team.md`,
+   or a path the user names.
+   Official names, terms and what they mean, phrases the team has retired, who the usual readers are.
+2. **Personal profile:** `~/.claude/clean-text/profile.md` (or a path the user names). How this
+   person writes: words they use and keep, words they never use, their terms, their corrections to
+   earlier edits.
+
+Precedence, highest first: the facts rules in §3, the personal profile, the team glossary, the
+catalogue. A trait in the profile ("numbered lists for steps", "writes «мы», not «я»") is the
+author's voice: keep it even where the catalogue would cut it. A term in the glossary or profile counts
+as explained for readers the file says know it.
+
+Format and update rules for both files are in `references/context.md`.
+
+---
+
+## 3. Facts stay as the author gave them
+
+You edit style. Facts, claims and their strength belong to the author.
+
+- **Never add.** No new number, date, name, source, example, scope, comparison basis or meaning of a
+  term. If you think you know it, it goes under "Open" as a question, never into the text. When you
+  replace a vague or banned word, use the plainest word with the same meaning («обеспечить взаимодействие
+  команд» → «команды работают вместе»). A more specific action or result would be an addition.
+- **Never delete a claim.** A sentence that says something about the subject (a result, forecast,
+  conclusion, opinion, decision) may be rephrased, not removed, even when vague or unsupported:
+  rephrase it plainly and ask under "Open". Delete only sentences that say nothing about the subject
+  (throat-clearing, comments about the text) or repeat a claim that stays elsewhere. This beats
+  anything in the catalogue that says to cut a claim.
+- **Keep the strength.** Degree and certainty stay exactly as strong: "a key role" is not "mainly";
+  "can work with any" is not "all are connected"; "some" is not "most"; "may" is not "will"; a plan
+  stays a plan. Same for «ключевой», «основной», «прежде всего», «все», «любые», «может», «умеет». If
+  no plain wording keeps the strength, keep the author's words and ask. Empty praise that measures
+  nothing («инновационный», «уникальный», «мощный», "seamless") is the catalogue's to cut; say so
+  under "What changed".
+- **Do not touch:** direct quotes, citations, legal and contract wording, code, product and company
+  names, URLs, numbers and their units. Approved figures keep their wording and basis (net/gross,
+  period, currency).
+- **One term, one meaning.** Use official names (glossary first). Do not coin new labels for things
+  that have names.
+
+---
+
+## 4. Jargon
 
 A reader who has to ask "what does that mean?" has been let down by the sentence. Abbreviations,
-project or ticket codes, names of in-house tools, made-up role titles and private nicknames each get
-a plain explanation where they first appear, or get replaced by what they stand for. "Ждём апрув от
-L2" becomes «Ждём подписи руководителя отдела закупок». "KPI-4 dropped from 91% to 84%" stays as
-it is until the author says what KPI-4 measures; then it becomes, for example, "Repeat purchases within
-a week dropped from 91% to 84%". If you do not know what a term means, ask; never guess it into the
-text. An explanation in a glossary at the end does not count, and
-neither does one three sections earlier: readers jump straight to the part they need.
-
----
-
-## 3. Failure classes the catalogue does not name
-
-These pass the `no-ai-slop` word lists and its eval. Each comes with a fix.
-
-| Failure class | Example | Fix |
-|---|---|---|
-| **Metaphor where a business noun belongs** | "the beating heart of your sales"; "a bridge between teams"; «сердце системы» | Name the thing, if the text says what it is. If it does not, keep the phrase and ask the author what it refers to |
-| **Inanimate subject, human verb** | "The dashboard tells a story"; "the numbers speak"; «отчёт рассказывает», «система понимает» | Give the verb to someone who can act, or use the literal verb: "the dashboard shows"; «в отчёте указано» |
-| **The author's own repeated filler verb** | the same figurative verb in paragraph after paragraph; «закрывает» in every section | Count figurative verbs across the whole piece. Keep at most one, where it does real work |
-| **Narrated honesty** | "Let's be upfront:"; "we say this openly"; «скажем прямо» | Delete the sentence about the prose. The fact convinces; the framing weakens it |
-| **Defensive register on basics** | "We would never cut corners on quality." | State what is done, using only facts in the text. If the text has none, keep the sentence and ask what the practice actually is |
-| **Rotation without meaning** | "This is a partnership, not a purchase"; «это не инструмент, а партнёр» | Say the one thing: "We work with you for the whole year" |
-| **Universal a reader discounts** | "Handles any task"; "works with every tool"; «любые задачи» | Narrow it only with limits the text already gives ("any supplier in the registry"). Otherwise keep it and ask what it really covers |
-| **Term the reader cannot parse** | "the flywheel" (never defined); "north-star metric"; «бэклог», «квик-вин» | Define at first use or replace (§2) |
-| **Cryptic punchline** | "Speed is a habit." | If the line needs explaining, cut it and end on the last concrete sentence |
-| **Colon joining unlike things** | "Our approach is simple: customers, people, growth." | A colon introduces a list, a label or a definition of the noun before it. Otherwise write two sentences |
-| **Synonym pair for one thing** | "customers" on one page, "clients" on the next | One term. Use the one already on the page |
-| **New slop introduced by the fix** | An edit that removed three metaphors added a fourth | Re-read your own edit as a stranger's draft. Pass D exists for this |
-
-Ordinary terms of art are not metaphors and stay: go live, hand-off, sales pipeline, bottleneck.
-The script flags some of them anyway. Judge each one in context. Do not swap a literal word for a
-synonym just to silence a repeat count: "says / states / notes" for the same act is synonym cycling.
-
----
-
-## 4. Register
-
-- **Default:** no binary contrasts; no runs of
-  punchy fragments; plain business language; no em dashes in short copy, at most two in a long
-  document, none in a deck. Russian тире follows `references/russian.md`.
-- **If the author has their own style guide or voice skill**, it wins where the two disagree.
-  Everything else in this skill still applies.
-- **Headings never end with a period**, in any language.
-- **The chat answer that reports the work** follows the same rules: no metaphors, no recap paragraph,
-  open items named as open.
+codes, names of in-house tools, made-up role titles and private nicknames get a plain explanation
+where they first appear, unless the glossary or profile says this reader knows them. If you do not
+know what a term means, keep it and ask; never guess it into the text. "KPI-4 dropped from 91% to 84%"
+stays until the author says what KPI-4 measures.
 
 ---
 
 ## 5. The loop
 
-Run the whole sequence on the whole piece every time. Never patch only the line someone pointed at:
-if a reader found one defect in a text you called clean, the text was not audited.
+**A. Write or edit.** Keep the author's draft (or the user's notes, if you write from scratch) as a
+file: the facts check needs it. Fix what the catalogue, `russian.md`, §4 and the table below cover.
 
-**Pass A. Extract and read.** Save the text to a file if it is not in one, then run:
+**B. Gate.** `python3 ${CLAUDE_SKILL_DIR}/scripts/audit.py <edited>` prints every sentence numbered,
+then pattern hits in both languages, then figurative words to look at. Hits are candidates: fix the
+ones that are slop, leave the ones that are not, without writing justifications. Exit 0 only means no
+pattern matched; metaphors, overclaims and jargon need your reading of the numbered list.
 
-```
-python3 ${CLAUDE_SKILL_DIR}/scripts/audit.py <file>
-```
+**C. Facts check.** `python3 ${CLAUDE_SKILL_DIR}/scripts/audit.py <draft> --compare <edited>` lists
+numbers (with тыс/млн/%), dates, quotes, codes and links the edit lost or added, changes in negations,
+hedges, conditions and currency marks, a warning if the text got over a third shorter, and every
+changed sentence as a was / now pair. Restore anything lost, remove anything added, and check each
+pair: same claim, same strength. This pair reading is also your re-read of your own edit.
 
-`${CLAUDE_SKILL_DIR}` is the folder this SKILL.md is in; if the variable is not set, use that path.
-The script prints every sentence with a number and its location (line, slide, HTML tag). Read each
-numbered sentence and give it a verdict: clean, or the defect and the fix. Use the catalogue,
-`references/russian.md`, §2 and the table in §3. Fix everything found. Add `--ignore-quoted` when the
-text quotes the patterns it discusses.
+**D. Rendered output** (decks, PDFs, HTML only): read what the reader will see, per
+`references/decks.md`.
 
-**Pass B. Regex gate.** The same run prints the gate: binary contrasts, banned words, empty phrases,
-metadiscourse, puffery, vague attribution, канцелярит, em dashes, in both languages. Every count
-must be zero, except a survivor you justify in writing (for example a grammatical Russian тире, or
-a contrast that is the factual point, such as "rent, not buy"). Exit code 0 means the gate passed. It does not mean the text passed: the gate cannot
-see a metaphor, an overclaim or a term the reader does not know.
+**E. Fresh reader** (Standard and Deep): per `references/fresh-reader.md`. Apply the findings marked
+fixable, put the rest under "Open". Deep only: one more reader on the fixed version.
 
-**Pass C. Figurative scan.** The watchlist section lists every figurative verb or noun with context
-and a repeat count. For each hit: a literal business word, or a written reason it is a term of art.
-Any figurative word used more than once gets cut to one.
+**Stop** when B and C are clean and the last reader returns nothing fixable. Questions only the author
+can answer do not keep the loop going: they go under "Open" and the text is delivered with them. Hard
+limit: two rounds of fixes in Standard, three in Deep.
 
-**Pass D. Re-read your own edit.** Run Pass A again on the edited text. Your fixes add new defects.
-Read the edit as a draft written by a stranger.
+### Failure classes the catalogue does not name
 
-**Pass E. Read the rendered output.** For decks, PDFs and HTML: render it and read what the reader
-will see (`references/decks.md`). Line breaks, orphan words and overflow are defects the source file
-cannot show. For chat text and Markdown, the file is the rendered output.
+| Class | Example | Fix |
+|---|---|---|
+| Metaphor for a business noun | "the beating heart of sales"; «сердце системы» | Name the thing if the text says what it is; otherwise keep it and ask |
+| Inanimate subject, human verb | "the dashboard tells a story"; «данные говорят» | Literal verb or the real actor: "the dashboard shows"; «по данным» |
+| Repeated figurative verb | the same verb in every paragraph | Keep at most one |
+| Narrated honesty | "Let's be upfront:"; «скажем прямо» | Delete the sentence about the prose |
+| Defensive register | "We would never cut corners on quality." | State what is done using facts in the text; if none, keep it and ask |
+| Rotation without meaning | «это не инструмент, а партнёр» | Say the one thing, unless the contrast is the fact ("rent, not buy") |
+| Universal a reader discounts | "handles any task"; «любые задачи» | Narrow only with limits the text gives; otherwise keep and ask |
+| Cryptic punchline | "Speed is a habit." | Cut only if it carries no claim; end on the last concrete sentence |
+| Colon joining unlike things | "Our approach is simple: customers, people, growth." | A colon introduces a list, label or definition; otherwise two sentences |
+| Synonym pair for one thing | "customers" here, "clients" there | One term |
+| Slop added by the fix | removing three metaphors added a fourth | Caught by the pair reading in C |
 
-**Pass F. Facts check.** Compare the author's draft with your version:
-
-```
-python3 ${CLAUDE_SKILL_DIR}/scripts/audit.py <draft> --compare <edited>
-```
-
-It lists numbers, dates, quoted names and codes that the edit lost or added, and any change in the
-count of negations, hedges («предварительно», "about"), conditions («если», "if") and currency marks.
-Restore every lost item. Remove every added one. A changed count is allowed only when you can say
-why in one line (for example, «а не выше» became a separate sentence); put that line under "Left as
-is, on purpose". Keep the author's draft as a file from the start so this pass is possible.
-
-The same run prints every changed sentence as a was / now pair. Read each pair and ask two
-questions: does the new sentence make the same claim, and is it exactly as strong (degree, certainty,
-scope, can versus does)? A pair that fails goes back to the author's wording, or to a version that
-passes both questions.
-
-**Pass G. Fresh reader.** When A–F find nothing, hand the final text to a reader who has seen
-nothing else, following `references/fresh-reader.md`. In Claude Code this is a subagent. Fix what
-the reader is right about, then run A–F again and use a new reader on the new version.
-
-**Pass H. Repeat.** Run A–G until a full pass and a fresh reader both find nothing. Stop after five
-passes or three fresh readers if it has not converged, and list what is left and why. Only then say
-"done", with the number of passes, edits and fresh readers.
-
-If you cannot honestly say "I read every numbered line of the final output, an independent reader
-read it too, and neither found anything", you are not done. Say what is left instead. Where no
-subagent is available, say that the independent read was not possible.
+Terms of art stay: go live, hand-off, sales pipeline, bottleneck. Headings never end with a period.
+No em dashes in short copy, at most two in a long document, none in a deck; Russian тире per
+`russian.md`.
 
 ---
 
-## 6. Deliver
+## 6. Learn the user's voice (every run, a few seconds)
+
+After delivering, update the personal profile per `references/context.md`, in at most three short
+lines. Learn from: the user's own drafts (recurring words and turns they clearly like), their
+corrections to your edits ("верни как было", "я так не говорю"), and terms they explained when
+answering "Open". If the draft was written by someone else (a colleague's email, a text the user
+forwarded), learn nothing from the draft; only the user's own corrections count. Store only how they write, never what the text says: no figures, quotes, client
+data or personal details. In Claude Code, write the file; where you cannot write files, offer the
+lines at the end for the user to save. Mention the update in one line ("Профиль: +2 наблюдения").
+
+---
+
+## 7. Deliver
 
 1. The final text, in full.
-2. **What changed:** the main edits as before → after, grouped by pattern. Keep it short.
-3. **Left as is, on purpose:** any survivor of the gate and why.
-4. **Open:** facts you need from the author, named as questions.
-5. **Facts check:** the result of the last `--compare` run, the reason for each difference left, and
-   the number of changed sentences you checked for same claim and strength.
-6. **Fresh reader:** how many readers ran and what the last one returned, or that no subagent was
-   available and the read was your own.
-7. In Loop mode: one line per pass, e.g. `Pass 2: 7 found, 7 fixed`.
+2. **What changed:** main edits, before → after, grouped by pattern. Short.
+3. **Open:** questions only the author can answer, numbered.
+4. **Checks:** one line each for the facts check (and why any difference stays), the fresh reader
+   (how many, what was fixed), and the level used. In Quick, one line in total.
+5. The profile line from §6.
 
 No recap paragraph at the end.
 
 ---
 
-## 7. Exit checklist
+## 8. Exit checklist
 
-Every answer must be yes. Any no means the text is not done.
-
-- [ ] A full numbered pass over the final output found zero defects.
-- [ ] A fresh reader who saw only the final text returned NOTHING FOUND, or the report says no subagent was available.
-- [ ] The edit added no number, date, name, claim, source or example the author did not give.
-- [ ] No claim of the author was deleted; the facts check shows nothing lost or added, or each difference is explained.
-- [ ] Every was / now pair makes the same claim at the same strength.
-- [ ] Every term exists in the source material or is explained at first use; one term, one meaning.
-- [ ] No binary contrasts, unless the contrast itself is the fact being stated.
-- [ ] No inanimate subject does a human action; every figurative word appears at most once and is justified.
-- [ ] No sentence describes the prose itself ("to be clear", «скажем честно»).
-- [ ] No basic fact is argued defensively or by negation.
-- [ ] Every universal ("any", "all", «любой») is scoped to what is true.
-- [ ] Headings end without a period.
-- [ ] Russian text: no канцелярит from `references/russian.md`; every тире is grammatical.
-- [ ] Decks and PDFs: read from the rendered file; no orphans, no overflow, no em dashes.
+- [ ] Effort level chosen and stated; limits respected.
+- [ ] Glossary and profile read if present; the author's voice traits kept.
+- [ ] Nothing added, no claim deleted, every was / now pair has the same claim and strength.
+- [ ] Quotes, legal wording, code, names, URLs, numbers and units untouched.
+- [ ] Gate candidates judged; numbered sentences read for metaphors, overclaims, jargon.
+- [ ] Fresh reader run (Standard, Deep) or its absence stated; fixable findings applied.
+- [ ] Open questions listed; profile updated with style only.
