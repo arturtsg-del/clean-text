@@ -12,7 +12,7 @@ description: >
 
 # Clean text
 
-This skill has four parts:
+This skill has five parts:
 
 1. **The catalogue.** `references/no-ai-slop.md` (vendored verbatim from petergyang/no-ai-slop, MIT):
    banned words, empty phrases, binary contrasts, colon reveals, puffery, weasel attribution,
@@ -25,6 +25,9 @@ This skill has four parts:
 4. **The loop (this file).** A text is done only when a full, numbered,
    sentence-by-sentence read of the final rendered output finds zero defects. The loop in §5 runs
    until that is true.
+5. **The fresh reader.** `references/fresh-reader.md`: a second Claude instance that sees only the
+   finished text and marks every place a reader would stop. It catches what the author cannot see in
+   their own text.
 
 Read the references the first time this skill triggers in a session. Read `references/decks.md`
 when the output is a slide deck, a PDF or an HTML page.
@@ -149,11 +152,17 @@ Read the edit as a draft written by a stranger.
 will see (`references/decks.md`). Line breaks, orphan words and overflow are defects the source file
 cannot show. For chat text and Markdown, the file is the rendered output.
 
-**Pass F. Repeat.** Run A–E until a full pass finds nothing. Stop after five passes if it has not
-converged, and list what is left and why. Only then say "done", with the number of passes and edits.
+**Pass F. Fresh reader.** When A–E find nothing, hand the final text to a reader who has seen
+nothing else, following `references/fresh-reader.md`. In Claude Code this is a subagent. Fix what
+the reader is right about, then run A–E again and use a new reader on the new version.
 
-If you cannot honestly say "I read every numbered line of the final output and found nothing", you are
-not done. Say what is left instead.
+**Pass G. Repeat.** Run A–F until a full pass and a fresh reader both find nothing. Stop after five
+passes or three fresh readers if it has not converged, and list what is left and why. Only then say
+"done", with the number of passes, edits and fresh readers.
+
+If you cannot honestly say "I read every numbered line of the final output, an independent reader
+read it too, and neither found anything", you are not done. Say what is left instead. Where no
+subagent is available, say that the independent read was not possible.
 
 ---
 
@@ -163,7 +172,9 @@ not done. Say what is left instead.
 2. **What changed:** the main edits as before → after, grouped by pattern. Keep it short.
 3. **Left as is, on purpose:** any survivor of the gate and why.
 4. **Open:** facts you need from the author, named as questions.
-5. In Loop mode: one line per pass, e.g. `Pass 2: 7 found, 7 fixed`.
+5. **Fresh reader:** how many readers ran and what the last one returned, or that no subagent was
+   available and the read was your own.
+6. In Loop mode: one line per pass, e.g. `Pass 2: 7 found, 7 fixed`.
 
 No recap paragraph at the end.
 
@@ -174,6 +185,7 @@ No recap paragraph at the end.
 Every answer must be yes. Any no means the text is not done.
 
 - [ ] A full numbered pass over the final output found zero defects.
+- [ ] A fresh reader who saw only the final text returned NOTHING FOUND, or the report says no subagent was available.
 - [ ] The edit added no number, date, name, claim, source or example the author did not give.
 - [ ] Every term exists in the source material or is explained at first use; one term, one meaning.
 - [ ] No binary contrasts, unless the contrast itself is the fact being stated.
