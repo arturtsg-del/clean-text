@@ -61,9 +61,10 @@ Read these if they exist; skip silently if they do not. Never search for them be
 1. **Team glossary:** `.claude/clean-text.md` in the current project, else `~/.claude/clean-text/team.md`,
    or a path the user names.
    Official names, terms and what they mean, phrases the team has retired, who the usual readers are.
-2. **Personal profile:** `~/.claude/clean-text/profile.md` (or a path the user names). How this
-   person writes: words they use and keep, words they never use, their terms, their corrections to
-   earlier edits.
+2. **Personal profile:** in Claude Code, `~/.claude/clean-text/profile.md` (or a path the user
+   names); in claude.ai, a file named `profile.md` in the current Project's knowledge, or a profile
+   the user pasted into the chat. How this person writes: words they use and keep, words they never
+   use, their terms, their corrections to earlier edits.
 
 Precedence, highest first: the facts rules in §3, the personal profile, the team glossary, the
 catalogue. A trait in the profile ("numbered lists for steps", "writes «мы», not «я»") is the
@@ -183,8 +184,10 @@ lines. Learn from: the user's own drafts (recurring words and turns they clearly
 corrections to your edits ("верни как было", "я так не говорю"), and terms they explained when
 answering "Open". If the draft was written by someone else (a colleague's email, a text the user
 forwarded), learn nothing from the draft; only the user's own corrections count. Store only how they write, never what the text says: no figures, quotes, client
-data or personal details. In Claude Code, write the file; where you cannot write files, offer the
-lines at the end for the user to save. Mention the update in one line ("Профиль: +2 наблюдения").
+data or personal details. In Claude Code, write the file. In claude.ai you cannot keep files
+between chats: give the new lines at the end in a code block and say they go into `profile.md` in
+the Project's knowledge (or a new `profile.md` there). Never point a claude.ai user at a `~/.claude`
+path. Mention the update in one line ("Профиль: +2 наблюдения").
 
 ---
 

@@ -33,9 +33,9 @@ term or a retired phrase is missing, suggest the line under "Open" and let the t
 
 ## Personal voice profile
 
-Where: `~/.claude/clean-text/profile.md`, or a path the user names. In claude.ai, where Claude cannot
-keep files between chats, the user can add the file to a Project's knowledge or paste it at the start
-of a chat.
+Where: in Claude Code, `~/.claude/clean-text/profile.md`, or a path the user names. In claude.ai,
+where Claude cannot keep files between chats, the profile is a file named `profile.md` in the
+Project's knowledge; outside a Project the user can paste it at the start of a chat.
 
 ```markdown
 # Voice profile
@@ -85,7 +85,8 @@ Raising a counter or moving a line from "Candidates" to "Keep" is free and does 
    the header and those observations, and tell the user once where it is and that they can edit or
    delete it. Never create an empty profile.
 6. **No file access** (claude.ai chat): give the new lines at the end in a code block, headed with the
-   section they belong to, so the user can add them.
+   section they belong to, and say they go into `profile.md` in the Project's knowledge. Do not
+   mention `~/.claude` paths there.
 
 ## How the files are used
 
